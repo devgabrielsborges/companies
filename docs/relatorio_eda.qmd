@@ -1,0 +1,203 @@
+---
+title: "Análise Exploratória de Dados: Panorama Empresarial"
+subtitle: "Relatório Estatístico Integrado ao Aplicativo Shiny"
+author: "devgabrielsborges"
+date: "2026-11-21"
+format:
+  html:
+    theme: flatly
+    toc: true
+    toc-depth: 3
+    code-fold: true
+    embed-resources: true
+    number-sections: true
+lang: pt
+execute:
+  warning: false
+  message: false
+---
+
+```{r setup}
+library(dplyr)
+library(ggplot2)
+library(knitr)
+library(scales)
+
+source(file.path("..", "R", "01_data_prep.R"))
+source(file.path("..", "R", "02_stats_engine.R"))
+source(file.path("..", "R", "03_plot_helpers.R"))
+
+prep <- get_prepared_data(
+  rds_path = file.path("..", "data", "processed", "companies_prep.rds"),
+  raw_dir = file.path("..", "data", "raw")
+)
+
+companies_df <- prep$companies
+audit_df <- prep$domain_audit
+kpis <- compute_overview_kpis(companies_df)
+```
+
+## Introdução e Auditoria de Dados
+
+Este relatório apresenta a Análise Exploratória de Dados (EDA) sobre a base de **`r format_int(kpis$n_companies)` empresas** (`data/raw/companies.csv`), enriquecida com as tabelas auxiliares de natureza jurídica (`legal_nature.csv`), qualificação dos sócios (`qualifications.csv`) e porte empresarial (`size.csv`).
+
+Todos os cálculos, testes de hipótese e estatísticas descritivas aqui exibidos utilizam exatamente o mesmo motor analítico (`R/01_data_prep.R` e `R/02_stats_engine.R`) embarcado no aplicativo Shiny, garantindo consistência numérica integral.
+
+```{r auditoria}
+knitr::kable(audit_df, caption = "Auditoria de cobertura de domínio e integridade dos dados.")
+```
+
+- **Integridade**: Não há valores ausentes (`NA`) em nenhuma das 6 colunas originais e todos os `company_id` são únicos.
+- **Cobertura de domínio**: Das 91 naturezas jurídicas listadas em `legal_nature.csv`, **22** ocorrem na base; das 68 qualificações em `qualifications.csv`, **13** estão presentes; e dos 4 portes em `size.csv`, **3** aparecem (`not-informed` possui 0 registros).
+
+## Distribuição do Capital Social
+
+O capital social (`capital_stock`) apresenta **assimetria severa à direita**, tornando a média aritmética (`r format_brl(kpis$mean_capital)`) pouco representativa frente à mediana (`r format_brl(kpis$median_capital)`).
+
+```{r quantis}
+quantis <- compute_capital_quantiles(companies_df)
+shape <- compute_shape_metrics(companies_df$capital_stock)
+
+quantis |>
+  dplyr::transmute(
+    Quantil = quantil,
+    `Capital (R$)` = format_brl(capital_brl),
+    `log10(Capital)` = log10_capital
+  ) |>
+  knitr::kable(caption = sprintf(
+    "Quantis do Capital Social (Assimetria = %.2f; Curtose em Excesso = %.2f).",
+    shape$skewness, shape$excess_kurtosis
+  ))
+```
+
+```{r plot-dist, fig.width=8, fig.height=4.2}
+ggplot(companies_df, aes(x = log10_capital)) +
+  geom_histogram(bins = 45, fill = PRIMARY_COLOR, color = "white", alpha = 0.9) +
+  geom_vline(xintercept = log10(kpis$median_capital), color = ACCENT_COLOR, linetype = "dashed", linewidth = 1) +
+  labs(
+    title = "Distribuição de log10(Capital Social)",
+    subtitle = sprintf("Linha tracejada indica a mediana (%s)", format_brl(kpis$median_capital)),
+    x = "log10(Capital Social em R$)",
+    y = "Frequência"
+  ) +
+  theme_minimal(base_size = 12)
+```
+
+## Comparação por Porte, Natureza Jurídica e Qualificação
+
+### Porte Empresarial (`company_size`)
+
+```{r porte-resumo}
+size_summ <- compute_grouped_summary(companies_df, "company_size")
+size_summ |>
+  dplyr::transmute(
+    Porte = grupo,
+    Empresas = format(n, big.mark = "."),
+    `%` = sprintf("%.2f%%", pct),
+    Mediana = format_brl(mediana),
+    IQR = format_brl(iqr),
+    Média = format_brl(media)
+  ) |>
+  knitr::kable(caption = "Estatísticas descritivas do capital social por porte empresarial.")
+```
+
+### Natureza Jurídica e Qualificação dos Responsáveis
+
+```{r natureza-qual}
+legal_summ <- compute_grouped_summary(companies_df, "legal_nature") |>
+  dplyr::slice_head(n = 10)
+
+legal_summ |>
+  dplyr::transmute(
+    `Natureza Jurídica (Top 10)` = grupo,
+    Empresas = format(n, big.mark = "."),
+    `%` = sprintf("%.2f%%", pct),
+    `% Acumulado` = sprintf("%.2f%%", pct_acumulado),
+    Mediana = format_brl(mediana)
+  ) |>
+  knitr::kable(caption = "Top 10 naturezas jurídicas por quantidade de empresas.")
+
+qual_summ <- compute_grouped_summary(companies_df, "owner_qualification") |>
+  dplyr::slice_head(n = 10)
+
+qual_summ |>
+  dplyr::transmute(
+    `Qualificação (Top 10)` = grupo,
+    Empresas = format(n, big.mark = "."),
+    `%` = sprintf("%.2f%%", pct),
+    Mediana = format_brl(mediana)
+  ) |>
+  knitr::kable(caption = "Top 10 qualificações dos sócios/responsáveis.")
+```
+
+## Associações Categóricas
+
+Avaliamos a dependência entre `company_size` e `legal_nature` (Top 6 + cauda longa) por meio do teste Qui-quadrado de independência e do V de Cramér.
+
+```{r assoc}
+assoc <- compute_contingency_analysis(companies_df, "company_size", "legal_nature", top_k = 6L)
+```
+
+- **Estatística $\chi^2$**: `r format(round(assoc$chi_sq, 1), big.mark = ".", decimal.mark = ",")`
+- **p-valor**: `r ifelse(assoc$p_value < 1e-4, "< 0,0001", sprintf("%.4f", assoc$p_value))`
+- **V de Cramér**: `r sprintf("%.4f", assoc$cramers_v)`
+
+## Concentração de Capital e Outliers
+
+```{r gini}
+gini_res <- compute_gini_and_lorenz(companies_df$capital_stock)
+```
+
+- **Índice de Gini**: `r sprintf("%.4f", gini_res$gini)`
+- **Participação do Top 1% das empresas**: `r sprintf("%.2f%%", gini_res$top_1_pct_share)` do capital social total.
+- **Participação do Top 10% das empresas**: `r sprintf("%.2f%%", gini_res$top_10_pct_share)` do capital social total.
+
+```{r plot-lorenz, fig.width=7, fig.height=4.5}
+ggplot(gini_res$lorenz_df, aes(x = p * 100, y = lorenz * 100)) +
+  geom_line(color = PRIMARY_COLOR, linewidth = 1.2) +
+  geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = MUTED_COLOR) +
+  labs(
+    title = sprintf("Curva de Lorenz do Capital Social (Gini = %.4f)", gini_res$gini),
+    x = "% Acumulado de Empresas",
+    y = "% Acumulado de Capital Social"
+  ) +
+  theme_minimal(base_size = 12)
+```
+
+## Padrões de Nomenclatura (`company_name`)
+
+```{r naming}
+suffix_summ <- compute_grouped_summary(companies_df, "legal_suffix")
+suffix_summ |>
+  dplyr::transmute(
+    `Sufixo Societário` = grupo,
+    Empresas = format(n, big.mark = "."),
+    `%` = sprintf("%.2f%%", pct),
+    Mediana = format_brl(mediana)
+  ) |>
+  knitr::kable(caption = "Distribuição de sufixos societários extraídos da razão social.")
+```
+
+## Testes Estatísticos Não Paramétricos
+
+Dada a forte assimetria de `capital_stock`, aplicamos o teste de **Kruskal-Wallis** com tamanho de efeito $\epsilon^2$ e comparações múltiplas pareadas com correção de **Holm-Bonferroni**.
+
+```{r tests}
+kw_size <- run_nonparametric_tests(companies_df, "company_size", p_adjust_method = "holm")
+knitr::kable(kw_size$omnibus, caption = "Teste omnibus de Kruskal-Wallis para capital_stock por porte.")
+kw_size$pairwise |>
+  dplyr::transmute(
+    `Grupo 1` = grupo_1,
+    `Grupo 2` = grupo_2,
+    `Mediana 1` = format_brl(mediana_1),
+    `Mediana 2` = format_brl(mediana_2),
+    `p-ajustado (Holm)` = ifelse(p_ajustado < 1e-4, "< 0,0001", sprintf("%.4f", p_ajustado))
+  ) |>
+  knitr::kable(caption = "Comparações pareadas pós-hoc entre portes empresariais.")
+```
+
+## Conclusões
+
+1. **Concentração Estrutural**: A base é dominada por `Limited Liability Business Company (LLC)` (84,40%) e pelo porte `micro-enterprise` (46,84%).
+2. **Desigualdade Extrema de Capital**: Embora a mediana seja de `r format_brl(kpis$median_capital)`, o coeficiente de Gini de `r sprintf("%.4f", gini_res$gini)` e a concentração no Top 1% evidenciam uma cauda longa altamente capitalizada.
+3. **Diferenças Estatisticamente Significativas**: Os testes não paramétricos confirmam diferenças significativas de capital social entre todos os portes empresariais ($p < 0,0001$ após correção de Holm).

@@ -14,10 +14,18 @@ wheels/
 .RData
 .Ruserdata
 .Rproj.user/
+*.Rproj
+packrat/
+renv/
 .Renviron
 rsconnect/
 docs/*_files/
 docs/.quarto/
 *.log
 
+# Universal
+.DS_Store
+Thumbs.db
+*.tmp
+*.swp
 .env

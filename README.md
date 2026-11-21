@@ -2,7 +2,7 @@
 
 Análise Exploratória de Dados (EDA) completa sobre **141.332 empresas** (`data/raw/companies.csv`) e tabelas auxiliares (`legal_nature.csv`, `qualifications.csv`, `size.csv`), integrada a um **relatório Quarto** e a um **aplicativo Shiny modular de 10 abas**.
 
-- **Aplicativo Online (`shinyapps.io`)**: *Pendente de publicação com token `rsconnect` (ver seção Deploy abaixo)*
+- **Aplicativo Online (`shinyapps.io`)**: https://gabrielsborges.shinyapps.io/companies-eda/
 - **Relatório Analítico**: [docs/relatorio_eda.html](docs/relatorio_eda.html) (gerado a partir de [docs/relatorio_eda.qmd](docs/relatorio_eda.qmd))
 
 ## Arquitetura do Projeto

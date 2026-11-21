@@ -81,9 +81,9 @@ description: "Task list for EDA e Aplicativo Interativo Shiny (001-eda-shiny-app
 
 **Purpose**: Publicação online no `shinyapps.io`, atualização da URL pública e merge do Pull Request.
 
-- [ ] T026 Configure `rsconnect::setAccountInfo()` credentials and deploy bundle (`app.R`, `R/`, `www/`, `data/processed/companies_prep.rds`) to `shinyapps.io`
-- [ ] T027 Update public `shinyapps.io` URL in `README.md` after deploy verification
-- [ ] T028 Commit `specs/001-eda-shiny-app/plan.md`, `specs/001-eda-shiny-app/tasks.md`, and `README.md` update via explicit `git add <file>` and merge PR #1 into `main`
+- [x] T026 Configure `rsconnect::setAccountInfo()` credentials and deploy bundle (`app.R`, `R/`, `www/`, `data/processed/companies_prep.rds`) to `shinyapps.io`
+- [x] T027 Update public `shinyapps.io` URL in `README.md` after deploy verification
+- [x] T028 Commit `specs/001-eda-shiny-app/plan.md`, `specs/001-eda-shiny-app/tasks.md`, and `README.md` update via explicit `git add <file>` and merge PR #1 into `main`
 
 ---
 
